@@ -12,3 +12,8 @@ venv\Scripts\activate.bat
 ```
 pip install -r requirements.txt
 ```
+Активировать постгис
+```
+CREATE EXTENSION postgis;
+CREATE EXTENSION postgis_topology;
+```
