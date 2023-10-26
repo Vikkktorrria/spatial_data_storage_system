@@ -129,17 +129,47 @@ def export_table_data():
     и передаёт их в систему экспорта табличных данных
     :return:
     """
+    cur = pg_connection.cursor()
+    get_layers_styles_query = "SELECT layers_style.id, layer.name, color " \
+            "FROM layers_style " \
+            "JOIN layer ON layers_style.id=layer.id;"
+    cur.execute(get_layers_styles_query)
+    res1 = cur.fetchall()
+    layers_json = []
+
+    for item in res1:
+        layer_id, layer_name, layer_color = item
+        layers_json.append({
+            'id': layer_id,
+            'name': layer_name,
+            'color': layer_color,
+        })
+
+    get_objects_styles_query = "SELECT objects_style.id, color " \
+                              "FROM objects_style JOIN geometry_object " \
+                              "ON objects_style.id=geometry_object.id;"
+    cur.execute(get_objects_styles_query)
+    res2 = cur.fetchall()
+    objects_json = []
+    for item in res2:
+        obj_id, obj_color = item
+        objects_json.append({
+            'id': obj_id,
+            'color': obj_color,
+        })
+
+    return JSONResponse({
+        "layers": layers_json,
+        "objects": objects_json
+    })
 
 @send_message
-@app.get("/import_spatial_data/")
+@app.get("/export_table_data/")
 def export_table_data():
     """
     Функция получает пространственные данные
     и сохраняет их в бд
     :return:
     """
-    test_json = { "type": "Point",
-    "coordinates": [30, 10]
-    }
-    query=f"INSERT INTO geometry_object(data, layer_id) VALUES (ST_GeomFromGeoJSON('{test_json}'), 1)"
+
 
