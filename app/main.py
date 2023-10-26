@@ -1,8 +1,11 @@
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
+import json
 import psycopg2
 from db import consts as db_consts
 import datetime
 import requests
+import time
 
 app = FastAPI()
 
@@ -44,6 +47,7 @@ def send_message(func):
         result = func()
         out_monitoring_system(datetime.datetime.now(), func.__name__, 200)
         return result
+
     return wrapper
 
 
@@ -56,13 +60,74 @@ def get_layer_objects(layer_id: int):
     """
     # Open a cursor to perform database operations
     cur = pg_connection.cursor()
-    query = """
-            SELECT geometry_object.id, data
+    query = f"""
+            SELECT geometry_object.id, ST_AsGeoJson(data)
             FROM geometry_object JOIN layer
-            ON geometry_object.id=layer.id;
+            ON geometry_object.id=layer.id
+            WHERE layer.id={layer_id};
+            """
+    cur.execute(query)
+    res = cur.fetchall()
+
+    layers_list = []
+    for item in res:
+        obj_id, obj_data = item
+        obj_data = json.loads(obj_data)
+
+        layers_list.append({
+            'id': obj_id,
+            'type': obj_data['type'],
+            'coordinates': obj_data['coordinates'],
+        })
+    return JSONResponse({"layers": layers_list})
+
+
+@send_message
+@app.post("/get_layers/")
+def get_layers():
+    """
+    Функция возвращает перечень слоёв
+    :return:
+    """
+    cur = pg_connection.cursor()
+    query = """
+            SELECT *
+            FROM layer;
     """
     cur.execute(query)
     res = cur.fetchall()
     return res
 
 
+@send_message
+@app.post("/export_spatial_data/")
+def export_spatial_data():
+    """
+    Функция возвращает все пространственные данные из бд
+    и передаёт их в систему экспорта пространственных данных
+    :return:
+    """
+
+
+
+@send_message
+@app.post("/export_table_data/")
+def export_table_data():
+    """
+    Функция возвращает все табличные данные из бд
+    и передаёт их в систему экспорта табличных данных
+    :return:
+    """
+
+@send_message
+@app.get("/import_spatial_data/")
+def export_table_data():
+    """
+    Функция получает пространственные данные
+    и сохраняет их в бд
+    :return:
+    """
+    test_json = { "type": "Point",
+    "coordinates": [30, 10]
+    }
+    query=f"INSERT INTO geometry_object(data, layer_id) VALUES (ST_GeomFromGeoJSON('{test_json}'), 1)"
