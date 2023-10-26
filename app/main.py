@@ -21,9 +21,10 @@ def in_monitoring_system(in_date_time, f_name):
 
     url = "http://monitoring-service-url"  # допустим, настоящий url
     message = {
-        "date_time": in_date_time,
+        "date_time": str(in_date_time),
         "function": f_name,
     }
+    print(message)
     response = requests.post(url, json=message)
     return response.status_code
 
@@ -33,10 +34,11 @@ def out_monitoring_system(out_date_time, f_name, status):
 
     url = "http://monitoring-service-url"  # допустим, настоящий url
     message = {
-        "date_time": out_date_time,
+        "date_time": str(out_date_time),
         "function": f_name,
         "status": status
     }
+    print(message)
     response = requests.post(url, json=message)
     return response.status_code
 
@@ -44,10 +46,12 @@ def out_monitoring_system(out_date_time, f_name, status):
 def send_message(func):
     def wrapper(*args, **kwargs):
         in_monitoring_system(datetime.datetime.now(), func.__name__)
-        result = func()
-        out_monitoring_system(datetime.datetime.now(), func.__name__, 200)
-        return result
-
+        try:
+            result = func()
+            out_monitoring_system(datetime.datetime.now(), func.__name__, 'ok')
+            return result
+        except:
+            out_monitoring_system(datetime.datetime.now(), func.__name__, 'error')
     return wrapper
 
 
@@ -69,17 +73,17 @@ def get_layer_objects(layer_id: int):
     cur.execute(query)
     res = cur.fetchall()
 
-    layers_list = []
+    objects_list = []
     for item in res:
         obj_id, obj_data = item
         obj_data = json.loads(obj_data)
 
-        layers_list.append({
+        objects_list.append({
             'id': obj_id,
             'type': obj_data['type'],
             'coordinates': obj_data['coordinates'],
         })
-    return JSONResponse({"layers": layers_list})
+    return JSONResponse({"objects": objects_list})
 
 
 @send_message
@@ -96,7 +100,14 @@ def get_layers():
     """
     cur.execute(query)
     res = cur.fetchall()
-    return res
+    layers_list = []
+    for layer in res:
+        layer_id, layer_name = layer
+        layers_list.append({
+            'id': layer_id,
+            'name': layer_name
+        })
+    return JSONResponse({"layers": layers_list})
 
 
 @send_message
@@ -131,3 +142,4 @@ def export_table_data():
     "coordinates": [30, 10]
     }
     query=f"INSERT INTO geometry_object(data, layer_id) VALUES (ST_GeomFromGeoJSON('{test_json}'), 1)"
+
