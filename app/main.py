@@ -59,7 +59,7 @@ def send_message(func):
 @app.post("/get_layer_objects/")
 def get_layer_objects(layer_id: int):
     """
-    Функция возвращает объект выбранного слоя
+    Функция возвращает объекты выбранного слоя
     :return:
     """
     # Open a cursor to perform database operations
@@ -67,7 +67,7 @@ def get_layer_objects(layer_id: int):
     query = f"""
             SELECT geometry_object.id, ST_AsGeoJson(data)
             FROM geometry_object JOIN layer
-            ON geometry_object.id=layer.id
+            ON geometry_object.layer_id=layer.id
             WHERE layer.id={layer_id};
             """
     cur.execute(query)
@@ -117,7 +117,56 @@ def export_spatial_data():
     Функция возвращает все пространственные данные из бд
     и передаёт их в систему экспорта пространственных данных
     :return:
+    JSON следующей структуры
+    {
+      "layers": [
+        {
+          "id": идентификатор_слоя,
+          "name": "имя_слоя",
+          "objects": [
+            {
+              "id": идентификатор_объекта,
+              "type": "ТипОбъекта (Point, LineString, Polygon)",
+              "coordinates": [x, y]
+            }
+          ]
+        }
+      ]
+    }
     """
+    cur = pg_connection.cursor()
+    query = """
+            SELECT geometry_object.id AS geom_obj_id, layer.id AS layer_id, layer.name, ST_AsGeoJson(data)
+            FROM geometry_object JOIN layer
+            ON geometry_object.layer_id=layer.id;
+    """
+    cur.execute(query)
+    res = cur.fetchall()
+    layer_objects = []
+
+    for result in res:
+        geom_obj_id, layer_id, layer_name, geojson_string = result
+        geojson_data = json.loads(geojson_string)
+
+        layer = next((layer for layer in layer_objects if layer['id'] == layer_id), None)
+        if layer:
+            layer['objects'].append({
+                'id': geom_obj_id,
+                'type': geojson_data['type'],
+                'coordinates': geojson_data['coordinates']
+            })
+        else:
+            layer_objects.append({
+                'id': layer_id,
+                'name': layer_name,
+                'objects': [{
+                    'id': geom_obj_id,
+                    'type': geojson_data['type'],
+                    'coordinates': geojson_data['coordinates']
+                }]
+            })
+    return JSONResponse({"layers": layer_objects})
+
 
 
 
@@ -164,8 +213,8 @@ def export_table_data():
     })
 
 @send_message
-@app.get("/export_table_data/")
-def export_table_data():
+@app.get("/import_spatial_data/")
+def import_spatial_data():
     """
     Функция получает пространственные данные
     и сохраняет их в бд
