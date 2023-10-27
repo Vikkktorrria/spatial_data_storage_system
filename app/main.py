@@ -52,7 +52,49 @@ def send_message(func):
             return result
         except:
             out_monitoring_system(datetime.datetime.now(), func.__name__, 'error')
+
     return wrapper
+
+
+@send_message
+@app.post("/get_layers/")
+def get_layers():
+    """
+    Функция возвращает перечень слоёв
+    :return:
+    {
+      "layers": [
+          {
+            "id": идентификатор_слоя,
+            "name": "ИмяСлоя"
+          },
+          {
+            "id": идентификатор_слоя,
+            "name": "ИмяСлоя"
+          },
+          ...
+          {
+            "id": идентификатор_слоя,
+            "name": "ИмяСлоя"
+          }
+      ]
+    }
+    """
+    cur = pg_connection.cursor()
+    query = """
+            SELECT *
+            FROM layer;
+    """
+    cur.execute(query)
+    res = cur.fetchall()
+    layers_list = []
+    for layer in res:
+        layer_id, layer_name = layer
+        layers_list.append({
+            'id': layer_id,
+            'name': layer_name
+        })
+    return JSONResponse({"layers": layers_list})
 
 
 @send_message
@@ -61,6 +103,21 @@ def get_layer_objects(layer_id: int):
     """
     Функция возвращает объекты выбранного слоя
     :return:
+    {
+        "objects": [
+            {
+                "id": идентификатор_объекта,
+                "type": "ТипОбъекта (Point, LineString, Polygon)",
+                "coordinates": [координаты]
+            },
+            ...
+            {
+                "id": идентификатор_объекта,
+                "type": "ТипОбъекта (Point, LineString, Polygon)",
+                "coordinates": [координаты]
+            }
+        ]
+    }
     """
     # Open a cursor to perform database operations
     cur = pg_connection.cursor()
@@ -87,31 +144,154 @@ def get_layer_objects(layer_id: int):
 
 
 @send_message
-@app.post("/get_layers/")
-def get_layers():
+@app.post("/export_spatial_data/")
+def export_spatial_data(layer_id: int):
     """
-    Функция возвращает перечень слоёв
+    Функция возвращает все пространственные данные по определённому слою
+    и передаёт их в систему экспорта пространственных данных
     :return:
+    JSON следующей структуры
+    {
+        "id": идентификатор_слоя,
+        "name": "ИмяСЛоя",
+        "objects": [
+            {
+                "id": идентификатор_объекта,
+                "type": "ТипОбъекта (Point, LineString, Polygon)",
+                "coordinates": [координаты]
+            },
+            {
+                ...
+            }
+        ]
+    }
     """
     cur = pg_connection.cursor()
-    query = """
-            SELECT *
-            FROM layer;
+    query = f"""
+            SELECT geometry_object.id AS geom_obj_id, layer.id AS layer_id, layer.name, ST_AsGeoJson(data)
+            FROM geometry_object JOIN layer
+            ON geometry_object.layer_id=layer.id
+            WHERE layer.id = {layer_id};
     """
     cur.execute(query)
     res = cur.fetchall()
-    layers_list = []
-    for layer in res:
-        layer_id, layer_name = layer
-        layers_list.append({
-            'id': layer_id,
-            'name': layer_name
+    objects = []
+
+    for result in res:
+        geom_obj_id, layer_id, layer_name, geojson_string = result
+        geojson_data = json.loads(geojson_string)
+
+        objects.append({
+            'id': geom_obj_id,
+            'type': geojson_data['type'],
+            'coordinates': geojson_data['coordinates']
         })
-    return JSONResponse({"layers": layers_list})
+
+    return JSONResponse({
+        "id": layer_id,
+        "name": layer_name,
+        "objects": objects
+    })
 
 
 @send_message
-@app.post("/export_spatial_data/")
+@app.post("/export_table_data/")
+def export_table_data():
+    """
+    Функция возвращает все табличные данные из бд
+    и передаёт их в систему экспорта табличных данных
+    :return:
+    {
+      "layers": [
+        {
+          "id": идентификатор_слоя,
+          "name": "ИмяСлоя",
+          "color": "цвет"
+        },
+        ...
+        {
+          "id": идентификатор_слоя,
+          "name": "ИмяСлоя",
+          "color": "цвет"
+        }
+      ],
+      "objects": [
+        {
+          "id": идентификатор_объекта,
+          "color": "цвет"
+        },
+        ...
+        {
+            ...
+        }
+      ]
+    }
+    """
+    cur = pg_connection.cursor()
+    get_layers_styles_query = "SELECT layers_style.layer_id, layer.name, color " \
+                              "FROM layers_style " \
+                              "JOIN layer ON layers_style.layer_id=layer.id;"
+    cur.execute(get_layers_styles_query)
+    res1 = cur.fetchall()
+    layers_json = []
+
+    for item in res1:
+        layer_id, layer_name, layer_color = item
+        layers_json.append({
+            'id': layer_id,
+            'name': layer_name,
+            'color': layer_color,
+        })
+
+    get_objects_styles_query = "SELECT objects_style.object_id, color " \
+                               "FROM objects_style JOIN geometry_object " \
+                               "ON objects_style.object_id=geometry_object.id;"
+    cur.execute(get_objects_styles_query)
+    res2 = cur.fetchall()
+    objects_json = []
+    for item in res2:
+        obj_id, obj_color = item
+        objects_json.append({
+            'id': obj_id,
+            'color': obj_color,
+        })
+
+    return JSONResponse({
+        "layers": layers_json,
+        "objects": objects_json
+    })
+
+
+@send_message
+@app.get("/import_spatial_data/")
+def import_spatial_data():
+    """
+    Функция получает пространственные данные
+    и сохраняет их в бд
+    :return:
+    {
+        "layer_name":layer_name,
+        "objects":[
+            {
+                "type":object_type,
+                "coordinates":object_coordinates
+            },
+            …
+            {
+                "type":object_type,
+                "coordinates":object_coordinates
+            }
+        ]
+    }
+    """
+    url = "http://example.com/your_external_service_endpoint"
+    response = requests.get(url)
+    data = response.json()
+
+
+
+@send_message
+@app.post("/export_all_spatial_data/")
 def export_spatial_data():
     """
     Функция возвращает все пространственные данные из бд
@@ -166,59 +346,3 @@ def export_spatial_data():
                 }]
             })
     return JSONResponse({"layers": layer_objects})
-
-
-
-
-@send_message
-@app.post("/export_table_data/")
-def export_table_data():
-    """
-    Функция возвращает все табличные данные из бд
-    и передаёт их в систему экспорта табличных данных
-    :return:
-    """
-    cur = pg_connection.cursor()
-    get_layers_styles_query = "SELECT layers_style.id, layer.name, color " \
-            "FROM layers_style " \
-            "JOIN layer ON layers_style.id=layer.id;"
-    cur.execute(get_layers_styles_query)
-    res1 = cur.fetchall()
-    layers_json = []
-
-    for item in res1:
-        layer_id, layer_name, layer_color = item
-        layers_json.append({
-            'id': layer_id,
-            'name': layer_name,
-            'color': layer_color,
-        })
-
-    get_objects_styles_query = "SELECT objects_style.id, color " \
-                              "FROM objects_style JOIN geometry_object " \
-                              "ON objects_style.id=geometry_object.id;"
-    cur.execute(get_objects_styles_query)
-    res2 = cur.fetchall()
-    objects_json = []
-    for item in res2:
-        obj_id, obj_color = item
-        objects_json.append({
-            'id': obj_id,
-            'color': obj_color,
-        })
-
-    return JSONResponse({
-        "layers": layers_json,
-        "objects": objects_json
-    })
-
-@send_message
-@app.get("/import_spatial_data/")
-def import_spatial_data():
-    """
-    Функция получает пространственные данные
-    и сохраняет их в бд
-    :return:
-    """
-
-
