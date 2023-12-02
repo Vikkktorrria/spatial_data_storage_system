@@ -57,7 +57,7 @@ def send_message(func):
 
 
 @send_message
-@app.post("/get_layers/")
+@app.get("/get_layers/")
 def get_layers():
     """
     Функция возвращает перечень слоёв
@@ -98,7 +98,7 @@ def get_layers():
 
 
 @send_message
-@app.post("/get_layer_objects/")
+@app.get("/get_layer_objects/")
 def get_layer_objects(layer_id: int):
     """
     Функция возвращает объекты выбранного слоя
@@ -146,7 +146,7 @@ def get_layer_objects(layer_id: int):
 
 
 @send_message
-@app.post("/export_spatial_data/")
+@app.get("/export_spatial_data/")
 def export_spatial_data(layer_id: int):
     """
     Функция возвращает все пространственные данные по определённому слою
@@ -197,7 +197,7 @@ def export_spatial_data(layer_id: int):
 
 
 @send_message
-@app.post("/export_table_data/")
+@app.get("/export_table_data/")
 def export_table_data(layer_id: int):
     """
     Функция возвращает табличные данные по слою
@@ -245,34 +245,7 @@ def export_table_data(layer_id: int):
 
 
 @send_message
-@app.get("/import_spatial_data/")
-def import_spatial_data():
-    """
-    Функция получает пространственные данные
-    и сохраняет их в бд
-    :return:
-    {
-        "layer_name":layer_name,
-        "objects":[
-            {
-                "type":object_type,
-                "coordinates":object_coordinates
-            },
-            …
-            {
-                "type":object_type,
-                "coordinates":object_coordinates
-            }
-        ]
-    }
-    """
-    url = "http://example.com/your_external_service_endpoint"
-    response = requests.get(url)
-    data = response.json()
-
-
-@send_message
-@app.post("/export_all_spatial_data/")
+@app.get("/export_all_spatial_data/")
 def export_all_spatial_data():
     """
     Функция возвращает все пространственные данные из бд
@@ -330,7 +303,7 @@ def export_all_spatial_data():
 
 
 @send_message
-@app.post("/export_all_table_data/")
+@app.get("/export_all_table_data/")
 def export_all_table_data():
     """
     Функция возвращает все табличные данные из бд
@@ -395,3 +368,31 @@ def export_all_table_data():
         "layers": layers_json,
         "objects": objects_json
     })
+
+
+
+@send_message
+@app.post("/import_spatial_data/")
+def import_spatial_data():
+    """
+    Функция получает пространственные данные
+    и сохраняет их в бд
+    :return:
+    {
+        "layer_name":layer_name,
+        "objects":[
+            {
+                "type":object_type,
+                "coordinates":object_coordinates
+            },
+            …
+            {
+                "type":object_type,
+                "coordinates":object_coordinates
+            }
+        ]
+    }
+    """
+    url = "http://example.com/your_external_service_endpoint"
+    response = requests.get(url)
+    data = response.json()
