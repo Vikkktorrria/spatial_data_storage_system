@@ -5,7 +5,6 @@ import psycopg2
 from db import consts as db_consts
 import datetime
 import requests
-import time
 
 app = FastAPI()
 
@@ -16,10 +15,18 @@ pg_connection = psycopg2.connect(
     password=db_consts.DB_PASSWORD)
 
 
-def in_monitoring_system(in_date_time, f_name):
+def in_monitoring_system(in_date_time: datetime.datetime, f_name: str):
+    """
+    Функция, предназначенная для вызова системы мониторинга
+     и передачи сообщения о входящем запросе
+     со следующими параметрами:
+    :param in_date_time: время поступления запроса
+    :param f_name: название функции
+    :return:
+    """
     print('in запрос отправлен', in_date_time, f_name)
 
-    url = "http://monitoring-service-url"  # допустим, настоящий url
+    url = "http://monitoring-service-url/some_function"  # допустим, настоящий url
     message = {
         "date_time": str(in_date_time),
         "function": f_name,
@@ -29,10 +36,19 @@ def in_monitoring_system(in_date_time, f_name):
     return response.status_code
 
 
-def out_monitoring_system(out_date_time, f_name, status):
+def out_monitoring_system(out_date_time: datetime.datetime, f_name: str, status: str):
+    """
+    Функция, предназначенная для вызова системы мониторинга
+    и передачи сообщения о результате выполнения функции
+    со следующими параметрами:
+    :param out_date_time: время завершения работы функции
+    :param f_name: название функции
+    :param status: статус, с которым завершилась функция (сейчас это ok, error)
+    :return:
+    """
     print('out запрос отправлен', out_date_time, f_name, status)
 
-    url = "http://monitoring-service-url"  # допустим, настоящий url
+    url = "http://monitoring-service-url/some_function"  # допустим, настоящий url
     message = {
         "date_time": str(out_date_time),
         "function": f_name,
@@ -44,6 +60,12 @@ def out_monitoring_system(out_date_time, f_name, status):
 
 
 def send_message(func):
+    """
+    Декоратор,
+    вызывает функцию in_monitoring_system до выполнения основной функции,
+    затем функцию out_monitoring_system после выполнения
+    """
+
     def wrapper(*args, **kwargs):
         in_monitoring_system(datetime.datetime.now(), func.__name__)
         try:
@@ -119,7 +141,6 @@ def get_layer_objects(layer_id: int):
         ]
     }
     """
-    # Open a cursor to perform database operations
     cur = pg_connection.cursor()
     query = f"""
             SELECT geometry_object.id, ST_AsGeoJson(data)
@@ -221,6 +242,10 @@ def export_table_data(layer_id: int):
                               f"WHERE layer.id={layer_id};"
     cur.execute(get_layers_styles_query)
     res1 = cur.fetchall()
+
+    if res1 == []:
+        return JSONResponse({})
+
     layer_name, layer_color = res1[0]
 
     get_objects_styles_query = f"SELECT objects_style.object_id, color " \
@@ -369,30 +394,28 @@ def export_all_table_data():
         "objects": objects_json
     })
 
-
-
-@send_message
-@app.post("/import_spatial_data/")
-def import_spatial_data():
-    """
-    Функция получает пространственные данные
-    и сохраняет их в бд
-    :return:
-    {
-        "layer_name":layer_name,
-        "objects":[
-            {
-                "type":object_type,
-                "coordinates":object_coordinates
-            },
-            …
-            {
-                "type":object_type,
-                "coordinates":object_coordinates
-            }
-        ]
-    }
-    """
-    url = "http://example.com/your_external_service_endpoint"
-    response = requests.get(url)
-    data = response.json()
+# @send_message
+# @app.post("/import_spatial_data/")
+# def import_spatial_data():
+#     """
+#     Функция получает пространственные данные
+#     и сохраняет их в бд
+#     :return:
+#     {
+#         "layer_name":layer_name,
+#         "objects":[
+#             {
+#                 "type":object_type,
+#                 "coordinates":object_coordinates
+#             },
+#             …
+#             {
+#                 "type":object_type,
+#                 "coordinates":object_coordinates
+#             }
+#         ]
+#     }
+#     """
+#     url = "http://example.com/your_external_service_endpoint"
+#     response = requests.get(url)
+#     data = response.json()
